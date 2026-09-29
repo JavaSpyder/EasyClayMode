@@ -3,10 +3,10 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
-namespace EasyHammerMode.source
+namespace EasyClayMode.source
 {
     [ProtoContract]
-    public class HammerModePacket
+    public class ClayModePacket
     {
         [ProtoMember(1)]
         public int Mode { get; set; }
@@ -15,21 +15,21 @@ namespace EasyHammerMode.source
         public int SlotId { get; set; }
     }
 
-    public sealed class EasyHammerModeModSystem : ModSystem
+    public sealed class EasyClayModeModSystem : ModSystem
     {
         public required ICoreClientAPI capi;
         public required ICoreServerAPI sapi;
         public required IClientNetworkChannel clientChannel;
         public required IServerNetworkChannel serverChannel;
 
-        private const string ChannelName = "easyhammermodepacket";
+        private const string ChannelName = "EasyClayModepacket";
 
         public override void Start(ICoreAPI api)
         {
             // Register network channel on both sides
             api.Network
                 .RegisterChannel(ChannelName)
-                .RegisterMessageType<HammerModePacket>();
+                .RegisterMessageType<ClayModePacket>();
         }
 
         public override void StartClientSide(ICoreClientAPI api)
@@ -38,26 +38,16 @@ namespace EasyHammerMode.source
 
             // Set up client network channel
             clientChannel = api.Network.GetChannel(ChannelName);
-            try
-            {
-                api.Input.RegisterHotKeyFirst("set-hammer-mode-upsetright", "Set Hammer Mode Upset Right", GlKeys.L, HotkeyType.CharacterControls);
-                api.Input.RegisterHotKeyFirst("set-hammer-mode-upsetdown", "Set Hammer Mode Upset Down", GlKeys.K, HotkeyType.CharacterControls);
-                api.Input.RegisterHotKeyFirst("set-hammer-mode-upsetleft", "Set Hammer Mode Upset Left", GlKeys.J, HotkeyType.CharacterControls);
-                api.Input.RegisterHotKeyFirst("set-hammer-mode-hit", "Set Hammer Mode Hit", GlKeys.O, HotkeyType.CharacterControls);
-                api.Input.RegisterHotKeyFirst("set-hammer-mode-upsetup", "Set Hammer Mode Upset Up", GlKeys.I, HotkeyType.CharacterControls);
-                api.Input.RegisterHotKeyFirst("set-hammer-mode-split", "Set Hammer Mode Split", GlKeys.U, HotkeyType.CharacterControls);
-            }
-            catch (Exception)
-            {
-                capi.Logger.Warning("Easy Hammer Mode - Failed to register hotkeys. They may already be registered.");
-            }
 
-            api.Input.SetHotKeyHandler("set-hammer-mode-upsetright", x => SetHammerMode(2));
-            api.Input.SetHotKeyHandler("set-hammer-mode-upsetdown", x => SetHammerMode(3));
-            api.Input.SetHotKeyHandler("set-hammer-mode-upsetleft", x => SetHammerMode(4));
-            api.Input.SetHotKeyHandler("set-hammer-mode-hit", x => SetHammerMode(0));
-            api.Input.SetHotKeyHandler("set-hammer-mode-upsetup", x => SetHammerMode(1));
-            api.Input.SetHotKeyHandler("set-hammer-mode-split", x => SetHammerMode(5));
+            api.Input.RegisterHotKeyFirst("set-clay-mode-1size", "Set Clay Mode 1x1", GlKeys.J, HotkeyType.CharacterControls);
+            api.Input.RegisterHotKeyFirst("set-clay-mode-2size", "Set Clay Mode 2x2", GlKeys.K, HotkeyType.CharacterControls);
+            api.Input.RegisterHotKeyFirst("set-clay-mode-3size", "Set Clay Mode 3x3", GlKeys.L, HotkeyType.CharacterControls);
+            api.Input.RegisterHotKeyFirst("set-clay-mode-duplicate", "Set Clay Mode Duplicate", GlKeys.I, HotkeyType.CharacterControls);
+
+            api.Input.SetHotKeyHandler("set-clay-mode-1size", x => SetClayMode(0));
+            api.Input.SetHotKeyHandler("set-clay-mode-2size", x => SetClayMode(1));
+            api.Input.SetHotKeyHandler("set-clay-mode-3size", x => SetClayMode(2));
+            api.Input.SetHotKeyHandler("set-clay-mode-duplicate", x => SetClayMode(3));
         }
 
         public override void StartServerSide(ICoreServerAPI api)
@@ -66,10 +56,10 @@ namespace EasyHammerMode.source
 
             // Set up server network channel and message handler
             serverChannel = api.Network.GetChannel(ChannelName)
-                .SetMessageHandler<HammerModePacket>(OnHammerModePacket);
+                .SetMessageHandler<ClayModePacket>(OnClayModePacket);
         }
 
-        public bool SetHammerMode(int mode)
+        public bool SetClayMode(int mode)
         {
             var player = capi.World.Player;
             if (player == null)
@@ -115,7 +105,7 @@ namespace EasyHammerMode.source
                 hotbarInventory == null ||
                 activeSlot == null || activeSlot.Empty ||
                 item == null ||
-                (!item.GetType().Name.Contains("ItemHammer"))
+                (!item.GetType().Name.Contains("ItemClay"))
             )
             {
                 return false;
@@ -125,7 +115,7 @@ namespace EasyHammerMode.source
             item.SetToolMode(activeSlot, player, player.CurrentBlockSelection, mode);
 
             // Send packet to server for synchronization
-            var packet = new HammerModePacket
+            var packet = new ClayModePacket
             {
                 Mode = mode,
                 SlotId = activeSlotNumber
@@ -135,22 +125,19 @@ namespace EasyHammerMode.source
             return true;
         }
 
-        private void OnHammerModePacket(IPlayer fromPlayer, HammerModePacket packet)
+        private void OnClayModePacket(IPlayer fromPlayer, ClayModePacket packet)
         {
             IInventory hotbarInventory = null;
-            string inventoryUsed = "unknown";
 
             try
             {
                 if (sapi.ModLoader.IsModEnabled("xskills"))
                 {
                     hotbarInventory = fromPlayer.InventoryManager.GetOwnInventory("xskillshotbar");
-                    inventoryUsed = "xskillshotbar";
 
                     if (hotbarInventory == null || hotbarInventory.Count == 0)
                     {
                         hotbarInventory = fromPlayer.InventoryManager.GetHotbarInventory();
-                        inventoryUsed = "vanilla hotbar";
                     }
                     else
                     {
@@ -161,7 +148,6 @@ namespace EasyHammerMode.source
                             if (testSlot == null || testSlot.Empty)
                             {
                                 hotbarInventory = fromPlayer.InventoryManager.GetHotbarInventory();
-                                inventoryUsed = "vanilla hotbar (XSkills slot empty)";
                             }
                         }
                     }
@@ -169,13 +155,11 @@ namespace EasyHammerMode.source
                 else
                 {
                     hotbarInventory = fromPlayer.InventoryManager.GetHotbarInventory();
-                    inventoryUsed = "vanilla hotbar";
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 hotbarInventory = fromPlayer.InventoryManager.GetHotbarInventory();
-                inventoryUsed = "fallback vanilla hotbar";
             }
 
             if (
@@ -189,7 +173,7 @@ namespace EasyHammerMode.source
             var itemSlot = hotbarInventory[packet.SlotId];
             var item = itemSlot?.Itemstack?.Collectible;
 
-            if (itemSlot == null || itemSlot.Empty || item == null || !item.GetType().Name.Contains("ItemHammer"))
+            if (itemSlot == null || itemSlot.Empty || item == null || !item.GetType().Name.Contains("ItemClay"))
             {
                 return;
             }
